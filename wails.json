@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "gerador-parecer",
+  "outputfilename": "gerador-parecer",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Guilherme Morum",
+    "email": "21986663+morum@users.noreply.github.com"
+  }
+}
