@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/morum/gerador-parecer/parser"
@@ -105,7 +106,10 @@ func getDefaultReplacements() []parser.Replacement {
 	}
 }
 
-// GerarArquivos
+var (
+	defaultWorkers = 5
+)
+
 func (a *App) GerarArquivos() string {
 	slog.Info("Iniciando geração de arquivos")
 
@@ -114,21 +118,54 @@ func (a *App) GerarArquivos() string {
 		return err.Error()
 	}
 
-	errs := make([]string, 0)
-	replacements := make([]parser.Replacement, 0)
-	replacements = append(replacements, getDefaultReplacements()...)
-	for _, d := range data[:10] {
-		for _, f := range d.Fields {
-			replacements = append(replacements, parser.Replacement{
-				Old: parser.ReplacementParam(f.VariableName),
-				New: f.Value,
-			})
-		}
+	numWorkers := defaultWorkers
+	dataLen := len(data)
+	if numWorkers > dataLen {
+		numWorkers = dataLen
+	}
 
-		err := parser.ReplaceAndSaveDoc(a.modeloFile, fmt.Sprintf("%s/%s.docx", a.dirSaida, d.Fields[0].Value), replacements...)
-		if err != nil {
-			errs = append(errs, err.Error())
+	chunkSize := (dataLen + numWorkers - 1) / numWorkers // Ceiling division
+	var wg sync.WaitGroup
+	errChan := make(chan string, numWorkers*10) // Buffered channel to collect errors
+
+	for i := 0; i < numWorkers; i++ {
+		start := i * chunkSize
+		end := start + chunkSize
+		if end > dataLen {
+			end = dataLen
 		}
+		chunk := data[start:end]
+
+		wg.Add(1)
+		go func(chunk []parser.Data) { // Replace 'YourDataType' with the actual data type
+			defer wg.Done()
+			for _, d := range chunk {
+				replacements := make([]parser.Replacement, 0)
+				replacements = append(replacements, getDefaultReplacements()...)
+				for _, f := range d.Fields {
+					replacements = append(replacements, parser.Replacement{
+						Old: parser.ReplacementParam(f.VariableName),
+						New: f.Value,
+					})
+				}
+
+				err := parser.ReplaceAndSaveDoc(a.modeloFile, fmt.Sprintf("%s/%s.docx", a.dirSaida, d.Fields[0].Value), replacements...)
+				if err != nil {
+					errChan <- err.Error()
+				}
+			}
+		}(chunk)
+	}
+
+	// Close the error channel when all goroutines are done
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	var errs []string
+	for e := range errChan {
+		errs = append(errs, e)
 	}
 
 	if len(errs) > 0 {
