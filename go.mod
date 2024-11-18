@@ -1,8 +1,6 @@
 module github.com/morum/gerador-parecer
 
-go 1.21
-
-toolchain go1.23.1
+go 1.23
 
 require (
 	github.com/nguyenthenguyen/docx v0.0.0-20230621112118-9c8e795a11db
